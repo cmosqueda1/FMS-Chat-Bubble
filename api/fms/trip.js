@@ -1,8 +1,10 @@
-import { fmsFetch } from "/utils/fmsFetch";
-
 export default function handler(req, res) {
+  async function fmsFetchMock() {
+    return { ok: true };
+  }
+
   res.status(200).json({
     ok: true,
-    imported: typeof fmsFetch === "function"
+    inlineFunctionWorks: typeof fmsFetchMock === "function"
   });
 }
