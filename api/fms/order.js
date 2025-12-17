@@ -56,6 +56,21 @@ export default async function handler(req, res) {
 
       safeFetch("estimate", () =>
         fmsFetch(`${base}/estimate-freight/${orderNo}`)
+      ),
+
+      // Files (BOL, PBOL, images, certs, etc.)
+      safeFetch("files", () =>
+        fmsFetch(`${base}/files/${orderNo}`)
+      ),
+
+      // Order history / timeline
+      safeFetch("history", () =>
+        fmsFetch(`${base}/shipment-order-history/${orderNo}`)
+      ),
+
+      // Actual freight / pallet-level data
+      safeFetch("actualFreight", () =>
+        fmsFetch(`${base}/actual-freight/${orderNo}`)
       )
     ]);
 
@@ -66,7 +81,10 @@ export default async function handler(req, res) {
       consignee,
       billing,
       accessorials,
-      estimate
+      estimate,
+      files,
+      history,
+      actualFreight
     ] = results;
 
     return res.status(200).json({
@@ -79,7 +97,10 @@ export default async function handler(req, res) {
         consignee,
         billing,
         accessorials,
-        estimate
+        estimate,
+        files,
+        history,
+        actualFreight
       }
     });
 
