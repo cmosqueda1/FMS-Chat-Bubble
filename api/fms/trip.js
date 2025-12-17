@@ -1,31 +1,39 @@
-/**
- * /api/fms/trip.js
- *
- * PURPOSE:
- * - Fetch ALL Trip-related data once a Trip # is known
- * - Preserve RAW API responses
- * - No normalization
- * - No UI shaping
- * - No order enrichment
- *
- * Cleanup / formatting will occur in a later file
- */
-
 import { fmsFetch } from "../utils/fmsFetch";
 
+/**
+ * Vercel API Route
+ * GET /api/fms/trip?tripNo=B01PSZ
+ */
+export default async function handler(req, res) {
+  try {
+    const { tripNo } = req.query;
+
+    if (!tripNo) {
+      return res.status(400).json({
+        error: "Missing required query param: tripNo"
+      });
+    }
+
+    const data = await getTripRaw(tripNo);
+
+    return res.status(200).json(data);
+  } catch (err) {
+    console.error("Trip API Error:", err);
+
+    return res.status(500).json({
+      error: "Trip fetch failed",
+      message: err.message || "Unknown error"
+    });
+  }
+}
+
 /* =========================
-   Public Entry Point
+   Raw Trip Data Collector
 ========================= */
 
-export async function getTripRaw(tripNo) {
-  if (!tripNo) {
-    throw new Error("Trip number is required");
-  }
-
+async function getTripRaw(tripNo) {
   const results = {
     tripNo,
-
-    // Each key mirrors an FMS endpoint exactly
     trip: null,
     stops: null,
     tasks: null,
@@ -35,12 +43,10 @@ export async function getTripRaw(tripNo) {
     history: null
   };
 
-  // Core trip data (required)
   results.trip = await getTrip(tripNo);
   results.stops = await getStopList(tripNo);
   results.tasks = await getTaskList(tripNo);
 
-  // Optional / supporting data (safe to fail)
   results.statistics = await safe(() => getTripStatistics(tripNo));
   results.tracking = await safe(() => getTripTracking(tripNo));
   results.files = await safe(() => getTripFiles(tripNo));
@@ -50,7 +56,7 @@ export async function getTripRaw(tripNo) {
 }
 
 /* =========================
-   API Calls (RAW)
+   FMS API Calls
 ========================= */
 
 function getTrip(tripNo) {
@@ -107,14 +113,10 @@ function getTripHistory(tripNo) {
    Helpers
 ========================= */
 
-/**
- * Wrap optional calls so one failure
- * does NOT break the entire trip pull
- */
 async function safe(fn) {
   try {
     return await fn();
-  } catch (err) {
+  } catch (e) {
     return null;
   }
 }
