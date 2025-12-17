@@ -1,3 +1,4 @@
+// api/chat.js
 import { handleChatMessage } from "../server/chatRouter.js";
 
 export default function handler(req, res) {
