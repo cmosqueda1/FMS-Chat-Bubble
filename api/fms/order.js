@@ -1,55 +1,86 @@
 import { fmsFetch } from "./_fmsClient.js";
 
+async function safeFetch(label, fn) {
+  try {
+    const data = await fn();
+    return { success: true, data };
+  } catch (err) {
+    return {
+      success: false,
+      error: err.message
+    };
+  }
+}
+
 export default async function handler(req, res) {
   try {
-    const { pro, do: orderNo } = req.query;
+    const { do: orderNo } = req.query;
 
-    if (!pro && !orderNo) {
+    if (!orderNo) {
       return res.status(400).json({
         success: false,
-        error: "Missing pro or do parameter"
+        error: "Missing DO parameter"
       });
     }
 
-    // Query is always performed by PRO when available
-    const queryPayload = pro
-      ? { tracking_pro: pro }
-      : { order_no: orderNo };
+    const base = "https://fms.item.com/fms-platform-order";
 
-    const data = await fmsFetch(
-      "https://fms.item.com/fms-platform-order/shipment-orders/query",
-      {
-        method: "POST",
-        body: JSON.stringify(queryPayload)
-      }
-    );
+    const results = await Promise.all([
+      safeFetch("headInfo", () =>
+        fmsFetch(`${base}/shipper/getshipment-orderbasic-headinfo/${orderNo}`)
+      ),
 
-    const order = data?.data?.[0];
+      safeFetch("shipperBasic", () =>
+        fmsFetch(`${base}/shipper/getshipment-orderbasic/${orderNo}`)
+      ),
 
-    if (!order) {
-      return res.status(404).json({
-        success: false,
-        error: "Order not found"
-      });
-    }
+      safeFetch("shipperFull", () =>
+        fmsFetch(`${base}/shipper/${orderNo}`)
+      ),
 
-    const normalized = {
-      do: order.order_no ?? null,
-      pro: order.tracking_pro ?? pro ?? null,
-      status: order.status ?? null,
-      pickupDate: order.pickup_complete_date ?? null,
-      deliveryDate: order.delivery_date ?? null,
-      shipperTerminal: order.shipper_terminal ?? null,
-      consigneeTerminal: order.consignee_terminal ?? null,
-      currentTerminal: order.current_terminal ?? null,
-      serviceType: order.service_type ?? null,
-      pallets: order.plts ?? null,
-      weight: order.weight ?? null
-    };
+      safeFetch("consignee", () =>
+        fmsFetch(`${base}/consignee/${orderNo}`)
+      ),
+
+      safeFetch("billing", () =>
+        fmsFetch(
+          `${base}/billing-information/getbillinginformationbyid?order_no=${orderNo}`
+        )
+      ),
+
+      safeFetch("accessorials", () =>
+        fmsFetch(
+          `${base}/shipment-orders/acclist?orderNo=${orderNo}`
+        )
+      ),
+
+      safeFetch("estimate", () =>
+        fmsFetch(`${base}/estimate-freight/${orderNo}`)
+      )
+    ]);
+
+    const [
+      headInfo,
+      shipperBasic,
+      shipperFull,
+      consignee,
+      billing,
+      accessorials,
+      estimate
+    ] = results;
 
     return res.status(200).json({
       success: true,
-      order: normalized
+      orderNo,
+      raw: {
+        headInfo,
+        shipperBasic,
+        shipperFull,
+        consignee,
+        billing,
+        accessorials,
+        estimate
+      }
     });
 
   } catch (err) {
