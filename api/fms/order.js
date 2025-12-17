@@ -2,22 +2,25 @@ import { fmsFetch } from "./_fmsClient.js";
 
 export default async function handler(req, res) {
   try {
-    const { do: orderNo } = req.query;
+    const { pro, do: orderNo } = req.query;
 
-    if (!orderNo) {
+    if (!pro && !orderNo) {
       return res.status(400).json({
         success: false,
-        error: "Missing DO (order number)"
+        error: "Missing pro or do parameter"
       });
     }
+
+    // Query is always performed by PRO when available
+    const queryPayload = pro
+      ? { tracking_pro: pro }
+      : { order_no: orderNo };
 
     const data = await fmsFetch(
       "https://fms.item.com/fms-platform-order/shipment-orders/query",
       {
         method: "POST",
-        body: JSON.stringify({
-          order_no: orderNo
-        })
+        body: JSON.stringify(queryPayload)
       }
     );
 
@@ -32,7 +35,7 @@ export default async function handler(req, res) {
 
     const normalized = {
       do: order.order_no ?? null,
-      pro: order.tracking_pro ?? null,
+      pro: order.tracking_pro ?? pro ?? null,
       status: order.status ?? null,
       pickupDate: order.pickup_complete_date ?? null,
       deliveryDate: order.delivery_date ?? null,
