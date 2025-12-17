@@ -1,4 +1,4 @@
-import { fmsFetch } from "./utils/fmsFetch";
+import { fmsFetch } from "/utils/fmsFetch";
 
 export default function handler(req, res) {
   res.status(200).json({
