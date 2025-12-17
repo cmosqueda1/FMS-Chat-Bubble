@@ -1,9 +1,14 @@
-import { fmsFetch } from "../utils/fmsFetch";
-
 /**
- * Vercel API Route
+ * /api/fms/trip.js
+ * Vercel Serverless Function
+ *
  * GET /api/fms/trip?tripNo=B01PSZ
+ *
+ * Fetches RAW Trip data only.
  */
+
+import { fmsFetch } from "./utils/fmsFetch";
+
 export default async function handler(req, res) {
   try {
     const { tripNo } = req.query;
@@ -15,8 +20,8 @@ export default async function handler(req, res) {
     }
 
     const data = await getTripRaw(tripNo);
-
     return res.status(200).json(data);
+
   } catch (err) {
     console.error("Trip API Error:", err);
 
@@ -28,11 +33,11 @@ export default async function handler(req, res) {
 }
 
 /* =========================
-   Raw Trip Data Collector
+   RAW Trip Aggregator
 ========================= */
 
 async function getTripRaw(tripNo) {
-  const results = {
+  const result = {
     tripNo,
     trip: null,
     stops: null,
@@ -43,16 +48,18 @@ async function getTripRaw(tripNo) {
     history: null
   };
 
-  results.trip = await getTrip(tripNo);
-  results.stops = await getStopList(tripNo);
-  results.tasks = await getTaskList(tripNo);
+  // REQUIRED
+  result.trip = await getTrip(tripNo);
+  result.stops = await getStopList(tripNo);
+  result.tasks = await getTaskList(tripNo);
 
-  results.statistics = await safe(() => getTripStatistics(tripNo));
-  results.tracking = await safe(() => getTripTracking(tripNo));
-  results.files = await safe(() => getTripFiles(tripNo));
-  results.history = await safe(() => getTripHistory(tripNo));
+  // OPTIONAL (safe)
+  result.statistics = await safe(() => getTripStatistics(tripNo));
+  result.tracking = await safe(() => getTripTracking(tripNo));
+  result.files = await safe(() => getTripFiles(tripNo));
+  result.history = await safe(() => getTripHistory(tripNo));
 
-  return results;
+  return result;
 }
 
 /* =========================
@@ -116,7 +123,8 @@ function getTripHistory(tripNo) {
 async function safe(fn) {
   try {
     return await fn();
-  } catch (e) {
+  } catch (err) {
+    console.warn("Optional trip fetch failed:", err.message);
     return null;
   }
 }
