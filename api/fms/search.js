@@ -11,30 +11,42 @@ export default async function handler(req, res) {
       });
     }
 
-    const data = await fmsFetch(
-      `https://fms.item.com/fms-platform-dispatch-management/search-all?Keyword=${encodeURIComponent(keyword)}`,
-      { method: "GET" }
+    const search = await fmsFetch(
+      `https://fms.item.com/fms-platform-dispatch-management/search-all?Keyword=${encodeURIComponent(keyword)}`
     );
 
-    const raw = data?.data || {};
+    const raw = search?.data || {};
 
-    const response = {
-      tripNos: (raw.trips || []).map(t => t.trip_no),
+    const entities = {
       orders: (raw.orders || []).map(o => ({
         do: o.order_no,
         pro: o.pro_no
       })),
+
+      trips: (raw.trips || []).map(t => ({
+        tripNo: t.trip_no
+      })),
+
       linehaulTasks: (raw.lhs || []).map(lh => ({
         taskNo: lh.task_no,
         pro: lh.pro_no
       })),
+
       summary: raw.summary || []
+    };
+
+    // Useful for intent logic later
+    const counts = {
+      orders: entities.orders.length,
+      trips: entities.trips.length,
+      linehaulTasks: entities.linehaulTasks.length
     };
 
     return res.status(200).json({
       success: true,
       keyword,
-      resolved: response
+      counts,
+      entities
     });
 
   } catch (err) {
