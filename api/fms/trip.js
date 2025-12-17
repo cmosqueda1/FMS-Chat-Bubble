@@ -1,10 +1,8 @@
-export default function handler(req, res) {
-  async function fmsFetchMock() {
-    return { ok: true };
-  }
+import { fmsFetch } from "./utils/fmsFetch.js";
 
+export default function handler(req, res) {
   res.status(200).json({
     ok: true,
-    inlineFunctionWorks: typeof fmsFetchMock === "function"
+    imported: typeof fmsFetch === "function"
   });
 }
