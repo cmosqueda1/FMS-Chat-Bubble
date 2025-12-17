@@ -16,12 +16,25 @@ export default async function handler(req, res) {
       { method: "GET" }
     );
 
-    // Normalize results for chatbot use
-    const raw = data?.data;
+    const raw = data?.data || {};
+
+    const response = {
+      tripNos: (raw.trips || []).map(t => t.trip_no),
+      orders: (raw.orders || []).map(o => ({
+        do: o.order_no,
+        pro: o.pro_no
+      })),
+      linehaulTasks: (raw.lhs || []).map(lh => ({
+        taskNo: lh.task_no,
+        pro: lh.pro_no
+      })),
+      summary: raw.summary || []
+    };
 
     return res.status(200).json({
       success: true,
-      raw
+      keyword,
+      resolved: response
     });
 
   } catch (err) {
