@@ -1,18 +1,13 @@
-/**
- * /api/fms/utils/fmsFetch.js
- *
- * Centralized FMS API wrapper
- */
+export const config = {
+  runtime: "nodejs"
+};
 
 let cachedAuth = null;
 let tokenExpiry = 0;
 
 export async function fmsFetch(path, options = {}) {
   const baseUrl = process.env.FMS_BASE_URL;
-
-  if (!baseUrl) {
-    throw new Error("FMS_BASE_URL environment variable not set");
-  }
+  if (!baseUrl) throw new Error("FMS_BASE_URL not set");
 
   const auth = await getAuth();
 
@@ -77,7 +72,7 @@ async function getAuth() {
     companyId: process.env.FMS_COMPANY || "SBFH"
   };
 
-  tokenExpiry = now + (55 * 60 * 1000); // 55 minutes
+  tokenExpiry = now + 55 * 60 * 1000; // 55 min
 
   return cachedAuth;
 }
