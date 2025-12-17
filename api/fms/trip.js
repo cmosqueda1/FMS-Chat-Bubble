@@ -1,11 +1,6 @@
-/**
- * /api/fms/trip.js
- * Vercel Serverless Function
- *
- * GET /api/fms/trip?tripNo=B01PSZ
- *
- * Fetches RAW Trip data only.
- */
+export const config = {
+  runtime: "nodejs"
+};
 
 import { fmsFetch } from "./utils/fmsFetch";
 
@@ -27,7 +22,7 @@ export default async function handler(req, res) {
 
     return res.status(500).json({
       error: "Trip fetch failed",
-      message: err.message || "Unknown error"
+      message: err?.message || "Unknown error"
     });
   }
 }
@@ -48,12 +43,10 @@ async function getTripRaw(tripNo) {
     history: null
   };
 
-  // REQUIRED
   result.trip = await getTrip(tripNo);
   result.stops = await getStopList(tripNo);
   result.tasks = await getTaskList(tripNo);
 
-  // OPTIONAL (safe)
   result.statistics = await safe(() => getTripStatistics(tripNo));
   result.tracking = await safe(() => getTripTracking(tripNo));
   result.files = await safe(() => getTripFiles(tripNo));
@@ -66,55 +59,38 @@ async function getTripRaw(tripNo) {
    FMS API Calls
 ========================= */
 
-function getTrip(tripNo) {
-  return fmsFetch(
-    `/fms-platform-dispatch-management/TripDetail/GetTrip?tripNo=${tripNo}`
-  );
-}
+const getTrip = tripNo =>
+  fmsFetch(`/fms-platform-dispatch-management/TripDetail/GetTrip?tripNo=${tripNo}`);
 
-function getStopList(tripNo) {
-  return fmsFetch(
-    `/fms-platform-dispatch-management/TripDetail/GetStopList?tripNo=${tripNo}`
-  );
-}
+const getStopList = tripNo =>
+  fmsFetch(`/fms-platform-dispatch-management/TripDetail/GetStopList?tripNo=${tripNo}`);
 
-function getTaskList(tripNo) {
-  return fmsFetch(
-    `/fms-platform-dispatch-management/TripDetail/GetTaskList?tripNo=${tripNo}`
-  );
-}
+const getTaskList = tripNo =>
+  fmsFetch(`/fms-platform-dispatch-management/TripDetail/GetTaskList?tripNo=${tripNo}`);
 
-function getTripStatistics(tripNo) {
-  return fmsFetch(
-    `/fms-platform-dispatch-management/TripDetail/GetTripStatistics?tripNo=${tripNo}`
-  );
-}
+const getTripStatistics = tripNo =>
+  fmsFetch(`/fms-platform-dispatch-management/TripDetail/GetTripStatistics?tripNo=${tripNo}`);
 
-function getTripTracking(tripNo) {
-  return fmsFetch(
+const getTripTracking = tripNo =>
+  fmsFetch(
     `/fms-platform-dispatch-management/Trips/GetAllTrackingByTripId`,
     {
       method: "POST",
       body: JSON.stringify({ trip_no: tripNo })
     }
   );
-}
 
-function getTripFiles(tripNo) {
-  return fmsFetch(
+const getTripFiles = tripNo =>
+  fmsFetch(
     `/fms-platform-dispatch-management/Trips/GetFileInfoByTripId`,
     {
       method: "POST",
       body: JSON.stringify({ trip_no: tripNo })
     }
   );
-}
 
-function getTripHistory(tripNo) {
-  return fmsFetch(
-    `/fms-platform-dispatch-management/Trips/GetTripHistory?tripNo=${tripNo}`
-  );
-}
+const getTripHistory = tripNo =>
+  fmsFetch(`/fms-platform-dispatch-management/Trips/GetTripHistory?tripNo=${tripNo}`);
 
 /* =========================
    Helpers
