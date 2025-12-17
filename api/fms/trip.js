@@ -1,4 +1,8 @@
-export default async function handler(req, res) {
-  const r = await fetch("https://example.com");
-  res.status(200).json({ ok: true, status: r.status });
+import { fmsFetch } from "./utils/fmsFetch";
+
+export default function handler(req, res) {
+  res.status(200).json({
+    ok: true,
+    imported: typeof fmsFetch === "function"
+  });
 }
