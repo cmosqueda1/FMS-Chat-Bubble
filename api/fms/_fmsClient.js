@@ -23,10 +23,17 @@ async function login() {
 
   const json = await res.json();
 
+  if (!json?.data?.token || !json?.data?.third_party_token) {
+    throw new Error(
+      "FMS login did not return auth tokens. Check credentials."
+    );
+  }
+
   cachedAuth = {
     token: json.data.token,
     thirdPartyToken: json.data.third_party_token
   };
+
 
   // conservative TTL (25 min)
   authExpiry = Date.now() + 25 * 60 * 1000;
