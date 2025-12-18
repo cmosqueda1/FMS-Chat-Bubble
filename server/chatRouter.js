@@ -1,20 +1,15 @@
-import { runSearch } from "./fms/search.js";
-import { resolveSearchResult } from "./fms/resolveSearch.js";
+import { runSearch } from "../api/fms/search.js";
+import { resolveSearchResult } from "../api/fms/resolveSearch.js";
 
 /* helpers */
 function extractIdentifier(text = "") {
   const t = text.toUpperCase();
-
-  const trip = t.match(/B[A-Z0-9]+/);
-  if (trip) return trip[0];
-
-  const doMatch = t.match(/DO\d+/);
-  if (doMatch) return doMatch[0];
-
-  const pro = t.match(/\b(\d{6,8}|\d{11})\b/);
-  if (pro) return pro[0];
-
-  return null;
+  return (
+    t.match(/B[A-Z0-9]+/)?.[0] ||
+    t.match(/DO\d+/)?.[0] ||
+    t.match(/\b(\d{6,8}|\d{11})\b/)?.[0] ||
+    null
+  );
 }
 
 function isQuestion(text = "") {
@@ -22,31 +17,29 @@ function isQuestion(text = "") {
 }
 
 function summarize(resolved) {
-  switch (resolved.type) {
-    case "TRIP":
-      return `Trip ${resolved.tripNo} found.`;
-
-    case "PRO":
-      return resolved.do
-        ? `Order ${resolved.do} found (PRO ${resolved.pro}).`
-        : `PRO ${resolved.pro} found.`;
-
-    case "UNKNOWN":
-      return `Multiple or unclear results found for ${resolved.keyword}.`;
-
-    default:
-      return "Result found.";
+  if (resolved.type === "TRIP") {
+    return `Trip ${resolved.tripNo} found.`;
   }
+
+  if (resolved.type === "PRO") {
+    return resolved.do
+      ? `Order ${resolved.do} found (PRO ${resolved.pro}).`
+      : `PRO ${resolved.pro} found.`;
+  }
+
+  return `Multiple or unclear results found for ${resolved.keyword}.`;
 }
 
-/* main router */
+/*
+  Main deterministic router
+*/
 export async function handleChatMessage({ message, context = {} }) {
   const text = (message || "").trim();
   const identifier = extractIdentifier(text);
   const question = isQuestion(text);
 
-  // Lookup only
-  if (identifier && !question) {
+  // Lookup (identifier present)
+  if (identifier) {
     const searchResult = await runSearch(identifier);
     const resolved = resolveSearchResult(searchResult);
 
@@ -55,26 +48,6 @@ export async function handleChatMessage({ message, context = {} }) {
     return {
       nextStep: "AWAITING_INPUT",
       messages: [{ type: "system", text: summarize(resolved) }],
-      contextUpdates: { lastLookup: resolved }
-    };
-  }
-
-  // Question + identifier
-  if (identifier && question) {
-    const searchResult = await runSearch(identifier);
-    const resolved = resolveSearchResult(searchResult);
-
-    context.lastLookup = resolved;
-
-    return {
-      nextStep: "AWAITING_INPUT",
-      messages: [
-        { type: "system", text: summarize(resolved) },
-        {
-          type: "system",
-          text: "(Question detected — detailed logic coming next)"
-        }
-      ],
       contextUpdates: { lastLookup: resolved }
     };
   }
@@ -88,31 +61,13 @@ export async function handleChatMessage({ message, context = {} }) {
           type: "system",
           text: `Answering question about ${context.lastLookup.type}.`
         },
-        {
-          type: "system",
-          text: "(Generic placeholder response)"
-        }
+        { type: "system", text: "(Generic placeholder response)" }
       ],
       contextUpdates: {}
     };
   }
 
-  // Generic question
-  if (question) {
-    return {
-      nextStep: "AWAITING_INPUT",
-      messages: [
-        { type: "system", text: "This looks like a general question." },
-        {
-          type: "system",
-          text: "(Generic placeholder — SOP logic coming later)"
-        }
-      ],
-      contextUpdates: {}
-    };
-  }
-
-  // Fallback
+  // Generic fallback
   return {
     nextStep: "AWAITING_INPUT",
     messages: [
