@@ -79,3 +79,12 @@ export async function handleChatMessage({ message, context = {} }) {
     contextUpdates: {}
   };
 }
+return {
+  messages: [
+    {
+      type: "system",
+      text: "Request processed."
+    }
+  ],
+  context
+};
