@@ -1,12 +1,16 @@
 import { fmsFetch } from "./utils/fmsFetch.js";
+import { ensureFmsAuth } from "../tms/auth.js";
 
 /*
-  Reusable search logic for chatRouter + API
+  Reusable search logic WITH AUTH
 */
 export async function runSearch(keyword) {
   if (!keyword) {
     throw new Error("Missing search keyword");
   }
+
+  // 🔴 ENSURE AUTH BEFORE FETCH
+  await ensureFmsAuth();
 
   const search = await fmsFetch(
     `https://fms.item.com/fms-platform-dispatch-management/search-all?Keyword=${encodeURIComponent(keyword)}`
@@ -38,20 +42,15 @@ export async function runSearch(keyword) {
     linehaulTasks: entities.linehaulTasks.length
   };
 
-  return {
-    keyword,
-    counts,
-    entities
-  };
+  return { keyword, counts, entities };
 }
 
 /*
-  Existing API endpoint — preserved
+  API endpoint (unchanged behavior)
 */
 export default async function handler(req, res) {
   try {
     const { keyword } = req.query;
-
     const result = await runSearch(keyword);
 
     return res.status(200).json({
