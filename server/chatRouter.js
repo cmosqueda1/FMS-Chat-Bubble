@@ -1,6 +1,5 @@
-import { runSearch } from "../api/fms/search.js";
-import { resolveSearchResult } from "../api/fms/utils/resolveSearch.js";
-
+import { runSearch } from "./fms/search.js";
+import { resolveSearchResult } from "./fms/resolveSearch.js";
 /*
   Utility helpers
 */
