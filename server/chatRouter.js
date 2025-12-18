@@ -1,148 +1,133 @@
 // server/chatRouter.js
-// Deterministic, state-driven router (NO AI)
+// Deterministic conversational router (NO AI)
+
+function extractIdentifier(message) {
+  const text = message.toUpperCase();
+
+  if (/^B[A-Z0-9]+$/.test(text)) return { type: "TRIP", id: text };
+  if (/^DO\d+$/.test(text)) return { type: "DO", id: text };
+  if (/^\d{6,8}$|^\d{11}$/.test(text)) return { type: "PRO", id: text };
+
+  const tripMatch = text.match(/B[A-Z0-9]+/);
+  if (tripMatch) return { type: "TRIP", id: tripMatch[0] };
+
+  const doMatch = text.match(/DO\d+/);
+  if (doMatch) return { type: "DO", id: doMatch[0] };
+
+  const proMatch = text.match(/\b(\d{6,8}|\d{11})\b/);
+  if (proMatch) return { type: "PRO", id: proMatch[0] };
+
+  return null;
+}
+
+function isQuestion(message) {
+  return /[?]|WHAT|HOW|WHEN|WHERE|WHY|STATUS|DELIVER|STOP/i.test(message);
+}
 
 export function handleChatMessage({ message, step, context }) {
-  switch (step) {
+  const text = (message || "").trim();
+  const identifier = extractIdentifier(text);
+  const question = isQuestion(text);
 
-    /* =========================
-       SESSION START
-    ========================== */
-    case "START":
-      return {
-        nextStep: "AWAITING_IDENTIFIER",
-        messages: [
-          { type: "system", text: "Enter a Trip, DO, or PRO number to begin." }
-        ],
-        contextUpdates: {}
-      };
+  /* =========================
+     LOOKUP ONLY
+  ========================== */
+  if (identifier && !question) {
+    context.lastLookup = {
+      type: identifier.type,
+      id: identifier.id,
+      data: {} // real data later
+    };
 
-    /* =========================
-       IDENTIFIER ROUTING
-    ========================== */
-    case "AWAITING_IDENTIFIER": {
-      if (!message) {
-        return {
-          nextStep: "AWAITING_IDENTIFIER",
-          messages: [
-            { type: "system", text: "Enter a Trip, DO, or PRO number." }
-          ],
-          contextUpdates: {}
-        };
-      }
-
-      const input = message.trim().toUpperCase();
-
-      // Trip number (e.g. B01PSZ)
-      if (/^B[A-Z0-9]+$/.test(input)) {
-        return {
-          nextStep: "FETCH_TRIP_DETAILS",
-          messages: [
-            { type: "system", text: `Fetching Trip ${input}...` }
-          ],
-          contextUpdates: {
-            searchType: "TRIP",
-            tripNo: input
-          }
-        };
-      }
-
-      // DO number (e.g. DO251200002358)
-      if (/^DO\d+$/.test(input)) {
-        return {
-          nextStep: "FETCH_DO_DETAILS",
-          messages: [
-            { type: "system", text: `Fetching Order ${input}...` }
-          ],
-          contextUpdates: {
-            searchType: "DO",
-            doNo: input
-          }
-        };
-      }
-
-      // PRO number (6–8 digits OR exactly 11 digits)
-      if (/^\d{6,8}$|^\d{11}$/.test(input)) {
-        return {
-          nextStep: "FETCH_PRO_DETAILS",
-          messages: [
-            { type: "system", text: `Fetching PRO ${input}...` }
-          ],
-          contextUpdates: {
-            searchType: "PRO",
-            proNo: input
-          }
-        };
-      }
-
-      return {
-        nextStep: "AWAITING_IDENTIFIER",
-        messages: [
-          { type: "system", text: "Unrecognized format. Enter a Trip, DO, or PRO number." }
-        ],
-        contextUpdates: {}
-      };
-    }
-
-    /* =========================
-       PLACEHOLDER FETCH STEPS
-       (API wiring comes next)
-    ========================== */
-
-    case "FETCH_TRIP_DETAILS":
-      return {
-        nextStep: "RESULT_READY",
-        messages: [
-          { type: "system", text: "Trip found. (Mock response)" }
-        ],
-        contextUpdates: {
-          result: { type: "TRIP", mock: true }
+    return {
+      nextStep: "AWAITING_INPUT",
+      messages: [
+        {
+          type: "system",
+          text: `${identifier.type} ${identifier.id} found. (General info returned)`
         }
-      };
-
-    case "FETCH_DO_DETAILS":
-      return {
-        nextStep: "RESULT_READY",
-        messages: [
-          { type: "system", text: "Order found. (Mock response)" }
-        ],
-        contextUpdates: {
-          result: { type: "DO", mock: true }
-        }
-      };
-
-    case "FETCH_PRO_DETAILS":
-      return {
-        nextStep: "RESULT_READY",
-        messages: [
-          { type: "system", text: "PRO found. (Mock response)" }
-        ],
-        contextUpdates: {
-          result: { type: "PRO", mock: true }
-        }
-      };
-
-    /* =========================
-       RESULT DISPLAY
-    ========================== */
-    case "RESULT_READY":
-      return {
-        nextStep: "AWAITING_IDENTIFIER",
-        messages: [
-          { type: "system", text: "You may search another Trip, DO, or PRO." }
-        ],
-        contextUpdates: {}
-      };
-
-    /* =========================
-       FALLBACK
-    ========================== */
-    default:
-      return {
-        nextStep: "START",
-        messages: [
-          { type: "system", text: "Session reset." }
-        ],
-        contextUpdates: {}
-      };
+      ],
+      contextUpdates: { lastLookup: context.lastLookup }
+    };
   }
+
+  /* =========================
+     QUESTION WITH IDENTIFIER
+  ========================== */
+  if (identifier && question) {
+    context.lastLookup = {
+      type: identifier.type,
+      id: identifier.id,
+      data: {}
+    };
+
+    return {
+      nextStep: "AWAITING_INPUT",
+      messages: [
+        {
+          type: "system",
+          text: `Answering question about ${identifier.type} ${identifier.id}.`
+        },
+        {
+          type: "system",
+          text: `(Generic response — detailed logic will be added later)`
+        }
+      ],
+      contextUpdates: { lastLookup: context.lastLookup }
+    };
+  }
+
+  /* =========================
+     QUESTION USING CONTEXT
+  ========================== */
+  if (question && context.lastLookup) {
+    return {
+      nextStep: "AWAITING_INPUT",
+      messages: [
+        {
+          type: "system",
+          text: `Answering question about ${context.lastLookup.type} ${context.lastLookup.id}.`
+        },
+        {
+          type: "system",
+          text: `(Generic response — detailed logic will be added later)`
+        }
+      ],
+      contextUpdates: {}
+    };
+  }
+
+  /* =========================
+     GENERIC QUESTION
+  ========================== */
+  if (question) {
+    return {
+      nextStep: "AWAITING_INPUT",
+      messages: [
+        {
+          type: "system",
+          text: `This looks like a general question.`
+        },
+        {
+          type: "system",
+          text: `(Generic response placeholder — SOP / help logic coming later)`
+        }
+      ],
+      contextUpdates: {}
+    };
+  }
+
+  /* =========================
+     FALLBACK
+  ========================== */
+  return {
+    nextStep: "AWAITING_INPUT",
+    messages: [
+      {
+        type: "system",
+        text: "Please enter a Trip, DO, or PRO number, or ask a question."
+      }
+    ],
+    contextUpdates: {}
+  };
 }
