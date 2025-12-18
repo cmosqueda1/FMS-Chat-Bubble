@@ -1,90 +1,140 @@
+// server/chatRouter.js
 import { runSearch } from "../api/fms/search.js";
 import { resolveSearchResult } from "../api/fms/resolveSearch.js";
 
-/* helpers */
+function trimStr(v) {
+  return (typeof v === "string" ? v.trim() : "");
+}
+
 function extractIdentifier(text = "") {
   const t = text.toUpperCase();
-  return (
-    t.match(/B[A-Z0-9]+/)?.[0] ||
-    t.match(/DO\d+/)?.[0] ||
-    t.match(/\b(\d{6,8}|\d{11})\b/)?.[0] ||
-    null
-  );
+
+  // Trip numbers like B01PE6
+  const trip = t.match(/\bB[A-Z0-9]{4,}\b/);
+  if (trip) return trip[0];
+
+  // DO numbers like DO251200003484
+  const doMatch = t.match(/\bDO\d+\b/);
+  if (doMatch) return doMatch[0];
+
+  // PRO (6–8 digits) or (11 digits)
+  const pro = t.match(/\b(\d{6,8}|\d{11})\b/);
+  if (pro) return pro[0];
+
+  return null;
 }
 
 function isQuestion(text = "") {
-  return /WHAT|HOW|WHEN|WHERE|WHY|STATUS|DELIVER|STOP|\?/i.test(text);
+  return /\?|(^|\s)(WHAT|HOW|WHEN|WHERE|WHY|STATUS|DELIVER|DELIVERY|PICKUP|STOP|STOPS|TASK|TASKS|COUNT)\b/i.test(text);
 }
 
-function summarize(resolved) {
+function startupMessage() {
+  return {
+    type: "system",
+    text: "Enter a Trip, DO, or PRO number, or ask a question."
+  };
+}
+
+function summarizeResolved(resolved) {
+  if (!resolved || !resolved.type) return "No result.";
+
   if (resolved.type === "TRIP") {
     return `Trip ${resolved.tripNo} found.`;
   }
 
   if (resolved.type === "PRO") {
-    return resolved.do
-      ? `Order ${resolved.do} found (PRO ${resolved.pro}).`
-      : `PRO ${resolved.pro} found.`;
+    if (resolved.do) return `Order ${resolved.do} found (PRO ${resolved.pro}).`;
+    return `PRO ${resolved.pro} found.`;
   }
 
-  return `Multiple or unclear results found for ${resolved.keyword}.`;
+  if (resolved.type === "UNKNOWN") {
+    return `No single match found. (orders: ${resolved.counts?.orders ?? 0}, trips: ${resolved.counts?.trips ?? 0}, linehaul: ${resolved.counts?.linehaulTasks ?? 0})`;
+  }
+
+  return "Result found.";
 }
 
 /*
-  Main deterministic router
+  Deterministic router.
+  Must ALWAYS return: { messages: [...], context: {...} }
 */
-export async function handleChatMessage({ message, context = {} }) {
-  const text = (message || "").trim();
+export default async function chatRouter({ message, context }) {
+  const ctx = (context && typeof context === "object") ? { ...context } : {};
+  const text = trimStr(message);
+
+  // If UI sends an empty message (or first load triggers a blank send), return startup message
+  if (!text) {
+    // ensure startup only shows once if you want:
+    // show it if we have not shown it yet
+    if (!ctx._started) {
+      ctx._started = true;
+      return { messages: [startupMessage()], context: ctx };
+    }
+    return { messages: [], context: ctx };
+  }
+
+  // Always ensure the startup prompt has been set once.
+  if (!ctx._started) ctx._started = true;
+
   const identifier = extractIdentifier(text);
   const question = isQuestion(text);
 
-  // Lookup (identifier present)
+  // 1) If the user provided an identifier (Trip/DO/PRO/etc), we always treat it as a lookup request
+  //    regardless of whether it is phrased as a question.
   if (identifier) {
     const searchResult = await runSearch(identifier);
     const resolved = resolveSearchResult(searchResult);
 
-    context.lastLookup = resolved;
+    // Save last resolved entity for follow-ups
+    ctx.lastLookup = resolved;
+
+    // Deterministic, minimal response for now
+    const msg = summarizeResolved(resolved);
+
+    // If the user asked a question too, include a placeholder line (per your requirement)
+    if (question) {
+      return {
+        messages: [
+          { type: "system", text: msg },
+          { type: "system", text: "(Question detected — detailed question logic will be added next.)" }
+        ],
+        context: ctx
+      };
+    }
 
     return {
-      nextStep: "AWAITING_INPUT",
-      messages: [{ type: "system", text: summarize(resolved) }],
-      contextUpdates: { lastLookup: resolved }
+      messages: [{ type: "system", text: msg }],
+      context: ctx
     };
   }
 
-  // Question using previous context
-  if (question && context.lastLookup) {
+  // 2) Question without an identifier:
+  //    - If we have context, treat it as a follow-up to last lookup
+  //    - Otherwise generic placeholder (until SOP logic added)
+  if (question) {
+    if (ctx.lastLookup) {
+      return {
+        messages: [
+          { type: "system", text: `Follow-up question detected for ${ctx.lastLookup.type}.` },
+          { type: "system", text: "(Generic placeholder response — question intent logic coming next.)" }
+        ],
+        context: ctx
+      };
+    }
+
     return {
-      nextStep: "AWAITING_INPUT",
       messages: [
-        {
-          type: "system",
-          text: `Answering question about ${context.lastLookup.type}.`
-        },
-        { type: "system", text: "(Generic placeholder response)" }
+        { type: "system", text: "(Generic placeholder response — provide a Trip/DO/PRO to retrieve details.)" }
       ],
-      contextUpdates: {}
+      context: ctx
     };
   }
 
-  // Generic fallback
+  // 3) Non-question, no identifier: treat as generic text for now
   return {
-    nextStep: "AWAITING_INPUT",
     messages: [
-      {
-        type: "system",
-        text: "Enter a Trip, DO, or PRO number, or ask a question."
-      }
+      { type: "system", text: "Please enter a Trip, DO, or PRO number, or ask a question." }
     ],
-    contextUpdates: {}
+    context: ctx
   };
 }
-return {
-  messages: [
-    {
-      type: "system",
-      text: "Request processed."
-    }
-  ],
-  context
-};
