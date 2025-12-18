@@ -1,8 +1,7 @@
-import { fmsFetch } from "../../api/fms/utils/fmsFetch.js";
+import { fmsFetch } from "./utils/fmsFetch.js";
 
 /*
-  Shared FMS search logic.
-  Safe to be used by chatRouter and API wrappers.
+  Core search logic (reusable)
 */
 export async function runSearch(keyword) {
   if (!keyword) {
@@ -20,16 +19,13 @@ export async function runSearch(keyword) {
       do: o.order_no,
       pro: o.pro_no
     })),
-
     trips: (raw.trips || []).map(t => ({
       tripNo: t.trip_no
     })),
-
     linehaulTasks: (raw.lhs || []).map(lh => ({
       taskNo: lh.task_no,
       pro: lh.pro_no
     })),
-
     summary: raw.summary || []
   };
 
@@ -39,9 +35,26 @@ export async function runSearch(keyword) {
     linehaulTasks: entities.linehaulTasks.length
   };
 
-  return {
-    keyword,
-    counts,
-    entities
-  };
+  return { keyword, entities, counts };
+}
+
+/*
+  API route wrapper
+*/
+export default async function handler(req, res) {
+  try {
+    const { keyword } = req.query;
+    const result = await runSearch(keyword);
+
+    res.status(200).json({
+      success: true,
+      ...result
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({
+      success: false,
+      error: err.message
+    });
+  }
 }
