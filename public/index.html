@@ -37,10 +37,12 @@
       padding: 8px 10px;
       border-radius: 8px;
       font-size: 14px;
+      max-width: 90%;
     }
 
     .system {
       background: #1f2937;
+      align-self: flex-start;
     }
 
     .user {
@@ -59,6 +61,7 @@
       border-radius: 6px;
       border: none;
       outline: none;
+      font-size: 14px;
     }
 
     button {
@@ -66,6 +69,8 @@
       border-radius: 6px;
       border: none;
       background: #22c55e;
+      color: #000;
+      font-weight: 600;
       cursor: pointer;
     }
   </style>
@@ -86,7 +91,7 @@
   const inputEl = document.getElementById("input");
   const sendBtn = document.getElementById("send");
 
-  // Session state (frontend-owned)
+  // Frontend-owned session state
   let step = "START";
   let context = {};
 
@@ -98,21 +103,13 @@
     messagesEl.scrollTop = messagesEl.scrollHeight;
   }
 
-  async function sendMessage() {
-    const text = inputEl.value.trim();
-    if (!text && step !== "START") return;
-
-    if (text) {
-      addMessage(text, "user");
-    }
-
-    inputEl.value = "";
-
+  // Core backend caller
+  async function callBackend(message = "") {
     const res = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        message: text,
+        message,
         step,
         context
       })
@@ -125,9 +122,31 @@
       addMessage(m.text, "system");
     });
 
-    // Update step + context
+    // Update state
     step = data.nextStep || step;
     context = { ...context, ...(data.contextUpdates || {}) };
+
+    /*
+      🔴 CRITICAL FIX
+      Auto-execute system-driven FETCH steps
+      without waiting for user input
+    */
+    if (step && step.startsWith("FETCH_")) {
+      await callBackend("");
+    }
+  }
+
+  async function sendMessage() {
+    const text = inputEl.value.trim();
+
+    if (!text && step !== "START") return;
+
+    if (text) {
+      addMessage(text, "user");
+      inputEl.value = "";
+    }
+
+    await callBackend(text);
   }
 
   sendBtn.addEventListener("click", sendMessage);
@@ -135,8 +154,8 @@
     if (e.key === "Enter") sendMessage();
   });
 
-  // Kick off session
-  sendMessage();
+  // Start session automatically
+  callBackend("");
 </script>
 
 </body>
