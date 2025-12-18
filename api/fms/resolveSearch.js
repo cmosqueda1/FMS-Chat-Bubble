@@ -1,8 +1,9 @@
 /*
-  Resolve entity type from search-all response.
-  Never assume input == result.
+  Determines what the search-all response represents.
+  Response-driven — never assume based on input.
 */
-export function resolveSearchResult({ keyword, counts, entities }) {
+export function resolveSearchResult({ keyword, entities, counts }) {
+  // Single Trip hit
   if (counts.trips === 1) {
     return {
       type: "TRIP",
@@ -10,6 +11,7 @@ export function resolveSearchResult({ keyword, counts, entities }) {
     };
   }
 
+  // Single Order / PRO hit
   if (counts.orders === 1) {
     return {
       type: "PRO",
