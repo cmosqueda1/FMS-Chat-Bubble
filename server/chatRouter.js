@@ -1,133 +1,150 @@
-// server/chatRouter.js
-// Deterministic conversational router (NO AI)
+import { runSearch } from "../api/fms/search.js";
+import { resolveSearchResult } from "../api/fms/utils/resolveSearch.js";
 
-function extractIdentifier(message) {
-  const text = message.toUpperCase();
+/*
+  Utility helpers
+*/
+function extractIdentifier(text) {
+  if (!text) return null;
 
-  if (/^B[A-Z0-9]+$/.test(text)) return { type: "TRIP", id: text };
-  if (/^DO\d+$/.test(text)) return { type: "DO", id: text };
-  if (/^\d{6,8}$|^\d{11}$/.test(text)) return { type: "PRO", id: text };
+  const t = text.toUpperCase();
 
-  const tripMatch = text.match(/B[A-Z0-9]+/);
-  if (tripMatch) return { type: "TRIP", id: tripMatch[0] };
+  const trip = t.match(/B[A-Z0-9]+/);
+  if (trip) return trip[0];
 
-  const doMatch = text.match(/DO\d+/);
-  if (doMatch) return { type: "DO", id: doMatch[0] };
+  const doMatch = t.match(/DO\d+/);
+  if (doMatch) return doMatch[0];
 
-  const proMatch = text.match(/\b(\d{6,8}|\d{11})\b/);
-  if (proMatch) return { type: "PRO", id: proMatch[0] };
+  const pro = t.match(/\b(\d{6,8}|\d{11})\b/);
+  if (pro) return pro[0];
 
   return null;
 }
 
-function isQuestion(message) {
-  return /[?]|WHAT|HOW|WHEN|WHERE|WHY|STATUS|DELIVER|STOP/i.test(message);
+function isQuestion(text) {
+  return /WHAT|HOW|WHEN|WHERE|WHY|STATUS|DELIVER|STOP|\?/i.test(text);
 }
 
-export function handleChatMessage({ message, step, context }) {
+/*
+  Main router
+*/
+export async function handleChatMessage({ message, context = {} }) {
   const text = (message || "").trim();
   const identifier = extractIdentifier(text);
   const question = isQuestion(text);
 
-  /* =========================
-     LOOKUP ONLY
-  ========================== */
+  /*
+    LOOKUP (identifier only)
+  */
   if (identifier && !question) {
-    context.lastLookup = {
-      type: identifier.type,
-      id: identifier.id,
-      data: {} // real data later
-    };
+    const searchResult = await runSearch(identifier);
+    const resolved = resolveSearchResult(searchResult);
+
+    context.lastLookup = resolved;
 
     return {
       nextStep: "AWAITING_INPUT",
       messages: [
-        {
-          type: "system",
-          text: `${identifier.type} ${identifier.id} found. (General info returned)`
-        }
+        { type: "system", text: summarize(resolved) }
       ],
-      contextUpdates: { lastLookup: context.lastLookup }
+      contextUpdates: { lastLookup: resolved }
     };
   }
 
-  /* =========================
-     QUESTION WITH IDENTIFIER
-  ========================== */
+  /*
+    QUESTION + IDENTIFIER
+  */
   if (identifier && question) {
-    context.lastLookup = {
-      type: identifier.type,
-      id: identifier.id,
-      data: {}
-    };
+    const searchResult = await runSearch(identifier);
+    const resolved = resolveSearchResult(searchResult);
+
+    context.lastLookup = resolved;
 
     return {
       nextStep: "AWAITING_INPUT",
       messages: [
+        { type: "system", text: summarize(resolved) },
         {
           type: "system",
-          text: `Answering question about ${identifier.type} ${identifier.id}.`
-        },
-        {
-          type: "system",
-          text: `(Generic response — detailed logic will be added later)`
+          text: "(Question detected — detailed logic will be added later)"
         }
       ],
-      contextUpdates: { lastLookup: context.lastLookup }
+      contextUpdates: { lastLookup: resolved }
     };
   }
 
-  /* =========================
-     QUESTION USING CONTEXT
-  ========================== */
+  /*
+    QUESTION using last context
+  */
   if (question && context.lastLookup) {
     return {
       nextStep: "AWAITING_INPUT",
       messages: [
         {
           type: "system",
-          text: `Answering question about ${context.lastLookup.type} ${context.lastLookup.id}.`
+          text: `Answering question about ${context.lastLookup.type}.`
         },
         {
           type: "system",
-          text: `(Generic response — detailed logic will be added later)`
+          text: "(Generic placeholder response)"
         }
       ],
       contextUpdates: {}
     };
   }
 
-  /* =========================
-     GENERIC QUESTION
-  ========================== */
+  /*
+    GENERIC QUESTION (no identifier, no context)
+  */
   if (question) {
     return {
       nextStep: "AWAITING_INPUT",
       messages: [
         {
           type: "system",
-          text: `This looks like a general question.`
+          text: "This looks like a general question."
         },
         {
           type: "system",
-          text: `(Generic response placeholder — SOP / help logic coming later)`
+          text: "(Generic placeholder — SOP logic coming later)"
         }
       ],
       contextUpdates: {}
     };
   }
 
-  /* =========================
-     FALLBACK
-  ========================== */
+  /*
+    FALLBACK
+  */
   return {
     nextStep: "AWAITING_INPUT",
     messages: [
       {
         type: "system",
-        text: "Please enter a Trip, DO, or PRO number, or ask a question."
+        text: "Enter a Trip, DO, or PRO number, or ask a question."
       }
     ],
     contextUpdates: {}
   };
+}
+
+/*
+  Deterministic summarization
+*/
+function summarize(resolved) {
+  switch (resolved.type) {
+    case "TRIP":
+      return `Trip ${resolved.tripNo} found.`;
+
+    case "PRO":
+      return resolved.do
+        ? `Order ${resolved.do} found (PRO ${resolved.pro}).`
+        : `PRO ${resolved.pro} found.`;
+
+    case "UNKNOWN":
+      return `Multiple or unclear results found for ${resolved.keyword}.`;
+
+    default:
+      return "Result found.";
+  }
 }
